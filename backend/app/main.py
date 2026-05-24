@@ -1,3 +1,4 @@
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -17,13 +18,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-import os
 
 os.makedirs("uploads", exist_ok=True)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
-app.include_router(auth.router, prefix=f"{settings.API_V1_STR}/auth", tags=["auth"])
-app.include_router(tasks.router, prefix=f"{settings.API_V1_STR}/tasks", tags=["tasks"])
+app.include_router(
+    auth.router, prefix=f"{settings.API_V1_STR}/auth", tags=["auth"])
+app.include_router(
+    tasks.router, prefix=f"{settings.API_V1_STR}/tasks", tags=["tasks"])
+
 
 @app.get("/")
 def read_root():
