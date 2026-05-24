@@ -59,7 +59,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     } on DioException catch (e) {
       String errorMessage = 'Ошибка входа';
       if (e.response?.data is Map && e.response?.data['detail'] != null) {
-        errorMessage = e.response?.data['detail'].toString();
+        errorMessage = e.response?.data['detail']?.toString() ?? 'Ошибка входа';
       }
       state = state.copyWith(isLoading: false, error: errorMessage);
       return false;
