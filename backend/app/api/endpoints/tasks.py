@@ -1,7 +1,10 @@
+import os
+import shutil
+import uuid
 import json
 from datetime import datetime
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_
 import redis.asyncio as redis
@@ -37,6 +40,30 @@ async def create_task(
     await db.commit()
     await db.refresh(db_task)
     return db_task
+
+@router.get("/foundation/dashboard")
+async def get_foundation_dashboard(
+    db: AsyncSession = Depends(get_db), 
+    current_user: User = Depends(deps.get_current_foundation)
+):
+    # Fetch tasks created by this foundation
+    result = await db.execute(select(Task).filter(Task.foundation_id == current_user.id))
+    tasks = result.scalars().all()
+    
+    # We will return the raw dict for simplicity in MVP
+    response_data = []
+    for t in tasks:
+        # Get assignments for this task
+        assign_result = await db.execute(select(TaskAssignment).filter(TaskAssignment.task_id == t.id))
+        assignments = assign_result.scalars().all()
+        
+        response_data.append({
+            "id": t.id,
+            "title": t.title,
+            "status": t.status,
+            "assignments": [{"id": a.id, "status": a.status, "volunteer_id": a.volunteer_id, "result_text": a.result_text} for a in assignments]
+        })
+    return response_data
 
 @router.get("/feed", response_model=List[TaskResponse])
 async def get_task_feed(
@@ -112,7 +139,8 @@ async def swipe_right(
 @router.post("/assignments/{assignment_id}/submit")
 async def submit_report(
     assignment_id: int, 
-    report: ReportSubmit, 
+    result_text: str = Form(None),
+    image: UploadFile = File(None),
     db: AsyncSession = Depends(get_db), 
     current_user: User = Depends(deps.get_current_volunteer)
 ):
@@ -125,8 +153,21 @@ async def submit_report(
     if assignment.status != "in_progress":
         raise HTTPException(status_code=400, detail="Assignment is not in progress")
 
+    final_result_text = result_text or ""
+    
+    if image:
+        # Save image locally
+        filename = f"{uuid.uuid4()}_{image.filename}"
+        file_path = os.path.join("uploads", filename)
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(image.file, buffer)
+        
+        # Append image link to result text
+        image_url = f"http://localhost:8000/uploads/{filename}"
+        final_result_text += f"\n[Image: {image_url}]"
+
     assignment.status = "under_review"
-    assignment.result_text = report.result_text
+    assignment.result_text = final_result_text.strip()
     assignment.submitted_at = datetime.utcnow()
     
     await db.commit()

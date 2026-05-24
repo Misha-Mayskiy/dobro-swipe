@@ -3,33 +3,36 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../providers/auth_provider.dart';
 
-class LoginScreen extends ConsumerStatefulWidget {
-  const LoginScreen({Key? key}) : super(key: key);
+class RegisterScreen extends ConsumerStatefulWidget {
+  const RegisterScreen({Key? key}) : super(key: key);
 
   @override
-  ConsumerState<LoginScreen> createState() => _LoginScreenState();
+  ConsumerState<RegisterScreen> createState() => _RegisterScreenState();
 }
 
-class _LoginScreenState extends ConsumerState<LoginScreen> {
+class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _nameController = TextEditingController();
+  String _role = 'volunteer';
 
-  void _login() async {
-    final success = await ref.read(authProvider.notifier).login(
+  void _register() async {
+    final success = await ref.read(authProvider.notifier).register(
       _emailController.text,
       _passwordController.text,
+      _nameController.text,
+      _role,
     );
 
     if (success && mounted) {
-      final user = ref.read(authProvider).user;
-      if (user?.role == 'volunteer') {
+      if (_role == 'volunteer') {
         context.go('/volunteer/feed');
       } else {
         context.go('/foundation/dashboard');
       }
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(ref.read(authProvider).error ?? 'Ошибка входа')),
+        SnackBar(content: Text(ref.read(authProvider).error ?? 'Ошибка регистрации')),
       );
     }
   }
@@ -39,33 +42,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final authState = ref.watch(authProvider);
 
     return Scaffold(
+      appBar: AppBar(title: const Text('Регистрация')),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const SizedBox(height: 48),
-              const Icon(Icons.volunteer_activism, size: 80, color: Color(0xFF6C63FF)),
-              const SizedBox(height: 24),
-              Text(
-                'ДоброСвайп',
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: Theme.of(context).primaryColor,
-                    ),
-                textAlign: TextAlign.center,
+              TextField(
+                controller: _nameController,
+                decoration: InputDecoration(
+                  labelText: 'Имя / Название НКО',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                  prefixIcon: const Icon(Icons.person_outline),
+                ),
               ),
-              const SizedBox(height: 8),
-              Text(
-                'Микро-волонтерство в твоем кармане\nг. Сириус (Адлер)',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Colors.grey,
-                    ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 48),
+              const SizedBox(height: 16),
               TextField(
                 controller: _emailController,
                 decoration: InputDecoration(
@@ -84,19 +76,27 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   prefixIcon: const Icon(Icons.lock_outline),
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                value: _role,
+                items: const [
+                  DropdownMenuItem(value: 'volunteer', child: Text('Я Волонтер')),
+                  DropdownMenuItem(value: 'foundation', child: Text('Я Фонд (НКО)')),
+                ],
+                onChanged: (val) {
+                  if (val != null) setState(() => _role = val);
+                },
+                decoration: InputDecoration(
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                  prefixIcon: const Icon(Icons.group_outlined),
+                ),
+              ),
+              const SizedBox(height: 32),
               ElevatedButton(
-                onPressed: authState.isLoading ? null : _login,
+                onPressed: authState.isLoading ? null : _register,
                 child: authState.isLoading
                     ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text('Войти'),
-              ),
-              const SizedBox(height: 12),
-              TextButton(
-                onPressed: () {
-                  context.push('/register');
-                },
-                child: const Text('Еще нет аккаунта? Зарегистрироваться'),
+                    : const Text('Зарегистрироваться'),
               ),
             ],
           ),

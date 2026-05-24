@@ -1,90 +1,89 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:appinio_swiper/appinio_swiper.dart';
+import 'package:go_router/go_router.dart';
+import '../../providers/feed_provider.dart';
+import '../../data/models.dart';
 
-class FeedScreen extends StatefulWidget {
+class FeedScreen extends ConsumerStatefulWidget {
   const FeedScreen({Key? key}) : super(key: key);
 
   @override
-  State<FeedScreen> createState() => _FeedScreenState();
+  ConsumerState<FeedScreen> createState() => _FeedScreenState();
 }
 
-class _FeedScreenState extends State<FeedScreen> {
+class _FeedScreenState extends ConsumerState<FeedScreen> {
   final AppinioSwiperController controller = AppinioSwiperController();
-  
-  // Mock data
-  final List<Map<String, dynamic>> tasks = [
-    {
-      'title': 'Собрать мусор на пляже',
-      'foundation': 'ЭкоСириус',
-      'karma': 50,
-      'duration': '30 мин',
-      'distance': '1.2 км',
-      'image': 'https://via.placeholder.com/400x300',
-    },
-    {
-      'title': 'Отвезти продукты пенсионеру',
-      'foundation': 'Доброе Дело',
-      'karma': 100,
-      'duration': '45 мин',
-      'distance': '3.5 км',
-      'image': 'https://via.placeholder.com/400x300',
-    },
-  ];
 
   @override
   Widget build(BuildContext context) {
+    final feedState = ref.watch(feedProvider);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Лента задач'),
         actions: [
-          IconButton(icon: const Icon(Icons.person), onPressed: () {}),
+          IconButton(
+            icon: const Icon(Icons.person),
+            onPressed: () => context.push('/volunteer/profile'),
+          ),
         ],
       ),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
-            children: [
-              Expanded(
-                child: AppinioSwiper(
-                  controller: controller,
-                  cardCount: tasks.length,
-                  onSwipeBegin: (previousIndex, previousDirection, customSwipeEvent) {},
-                  onSwipeEnd: (previousIndex, targetIndex, activity) {
-                    // activity.direction == AxisDirection.right -> take task
-                  },
-                  cardBuilder: (BuildContext context, int index) {
-                    final task = tasks[index];
-                    return _buildCard(task);
-                  },
-                ),
-              ),
-              const SizedBox(height: 20),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  FloatingActionButton(
-                    heroTag: 'left',
-                    onPressed: () => controller.swipeLeft(),
-                    backgroundColor: Colors.white,
-                    child: const Icon(Icons.close, color: Colors.red, size: 30),
+        child: feedState.isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : feedState.tasks.isEmpty
+                ? const Center(child: Text('Нет новых задач'))
+                : Padding(
+                    padding: const EdgeInsets.all(20.0),
+                    child: Column(
+                      children: [
+                        Expanded(
+                          child: AppinioSwiper(
+                            controller: controller,
+                            cardCount: feedState.tasks.length,
+                            onSwipeEnd: (previousIndex, targetIndex, activity) async {
+                              final task = feedState.tasks[previousIndex];
+                              if (activity.direction == AxisDirection.right) {
+                                final success = await ref.read(feedProvider.notifier).swipeRight(task.id);
+                                if (success && mounted) {
+                                  context.push('/volunteer/active', extra: task);
+                                }
+                              } else if (activity.direction == AxisDirection.left) {
+                                await ref.read(feedProvider.notifier).swipeLeft(task.id);
+                              }
+                            },
+                            cardBuilder: (BuildContext context, int index) {
+                              return _buildCard(feedState.tasks[index]);
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            FloatingActionButton(
+                              heroTag: 'left',
+                              onPressed: () => controller.swipeLeft(),
+                              backgroundColor: Colors.white,
+                              child: const Icon(Icons.close, color: Colors.red, size: 30),
+                            ),
+                            FloatingActionButton(
+                              heroTag: 'right',
+                              onPressed: () => controller.swipeRight(),
+                              backgroundColor: Colors.white,
+                              child: const Icon(Icons.favorite, color: Colors.green, size: 30),
+                            ),
+                          ],
+                        )
+                      ],
+                    ),
                   ),
-                  FloatingActionButton(
-                    heroTag: 'right',
-                    onPressed: () => controller.swipeRight(),
-                    backgroundColor: Colors.white,
-                    child: const Icon(Icons.favorite, color: Colors.green, size: 30),
-                  ),
-                ],
-              )
-            ],
-          ),
-        ),
       ),
     );
   }
 
-  Widget _buildCard(Map<String, dynamic> task) {
+  Widget _buildCard(Task task) {
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(24),
@@ -104,7 +103,7 @@ class _FeedScreenState extends State<FeedScreen> {
             child: ClipRRect(
               borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
               child: Container(
-                color: Colors.grey[300], // Placeholder for image
+                color: Colors.grey[300],
                 width: double.infinity,
                 child: const Icon(Icons.image, size: 100, color: Colors.grey),
               ),
@@ -116,18 +115,18 @@ class _FeedScreenState extends State<FeedScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  task['title'],
+                  task.title,
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),
-                Text(task['foundation'], style: TextStyle(color: Theme.of(context).primaryColor)),
+                Text(task.description, maxLines: 2, overflow: TextOverflow.ellipsis),
                 const SizedBox(height: 16),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    _buildChip(Icons.timer, task['duration']),
-                    _buildChip(Icons.location_on, task['distance']),
-                    _buildChip(Icons.star, '+${task['karma']} кармы'),
+                    _buildChip(Icons.timer, '${task.durationMinutes} мин'),
+                    if (task.city != null) _buildChip(Icons.location_on, task.city!),
+                    _buildChip(Icons.star, '+${task.karmaReward} кармы'),
                   ],
                 )
               ],
