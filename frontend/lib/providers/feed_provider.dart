@@ -47,13 +47,13 @@ class FeedNotifier extends StateNotifier<FeedState> {
     }
   }
 
-  Future<bool> swipeRight(int taskId) async {
+  Future<int?> swipeRight(int taskId) async {
     try {
-      await apiClient.dio.post('/tasks/$taskId/swipe_right');
+      final response = await apiClient.dio.post('/tasks/$taskId/swipe_right');
       state = state.copyWith(tasks: state.tasks.where((t) => t.id != taskId).toList());
-      return true; // Successfully taken
+      return response.data['id'] as int?;
     } catch (e) {
-      return false; // Error taking task (e.g. already have one)
+      return null;
     }
   }
 }

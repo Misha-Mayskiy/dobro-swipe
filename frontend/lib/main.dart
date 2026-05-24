@@ -34,7 +34,13 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/volunteer/active',
-        builder: (context, state) => ActiveTaskScreen(task: state.extra as Task),
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>;
+          return ActiveTaskScreen(
+            task: extra['task'] as Task,
+            assignmentId: extra['assignmentId'] as int,
+          );
+        },
       ),
       GoRoute(
         path: '/volunteer/profile',

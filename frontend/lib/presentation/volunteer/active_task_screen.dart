@@ -6,11 +6,13 @@ import 'package:image_picker/image_picker.dart';
 import 'package:dio/dio.dart';
 import '../../data/models.dart';
 import '../../core/network.dart';
+import '../../providers/active_task_provider.dart';
 
 class ActiveTaskScreen extends ConsumerStatefulWidget {
   final Task task;
+  final int assignmentId;
 
-  const ActiveTaskScreen({Key? key, required this.task}) : super(key: key);
+  const ActiveTaskScreen({Key? key, required this.task, required this.assignmentId}) : super(key: key);
 
   @override
   ConsumerState<ActiveTaskScreen> createState() => _ActiveTaskScreenState();
@@ -47,17 +49,18 @@ class _ActiveTaskScreenState extends ConsumerState<ActiveTaskScreen> {
         ));
       }
 
-      // Hardcode assignment ID fetch or assume latest active. 
-      // For MVP, we need the assignment ID.
-      // Usually we get it from an endpoint like /auth/me/active_assignment
-      // For now, let's query the assignments for this task to find ours.
-      final response = await apiClient.dio.get('/auth/me'); // A simple way is to pass assignment id from Feed.
-      // Assuming a dedicated endpoint or passing assignment ID is better. 
-      // We will handle errors locally for this MVP flow.
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Отчет отправлен!')));
+      await apiClient.dio.post(
+        '/tasks/assignments/${widget.assignmentId}/submit',
+        data: formData,
+      );
+
+      // Refresh active task assignment state
+      ref.read(activeTaskProvider.notifier).fetchActiveAssignment();
+
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Отчет отправлен на проверку!')));
       if (mounted) context.pop();
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ошибка отправки')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ошибка отправки отчета')));
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }

@@ -4,7 +4,7 @@ import uuid
 import json
 from datetime import datetime
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Form
+from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Form, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_
 import redis.asyncio as redis
@@ -12,7 +12,7 @@ from app.api import deps
 from app.core.config import settings
 from app.db.session import get_db
 from app.models.models import Task, TaskAssignment, User
-from app.schemas.schemas import TaskCreate, TaskResponse, TaskAssignmentResponse, ReportSubmit, ReportReview
+from app.schemas.schemas import TaskCreate, TaskResponse, TaskAssignmentResponse, ReportSubmit, ReportReview, TaskAssignmentWithTask
 
 router = APIRouter()
 redis_client = redis.from_url(settings.REDIS_URL, decode_responses=True)
@@ -64,6 +64,29 @@ async def get_foundation_dashboard(
             "assignments": [{"id": a.id, "status": a.status, "volunteer_id": a.volunteer_id, "result_text": a.result_text} for a in assignments]
         })
     return response_data
+
+@router.get("/assignments/active", response_model=TaskAssignmentWithTask)
+async def get_active_assignment(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(deps.get_current_volunteer)
+):
+    result = await db.execute(
+        select(TaskAssignment)
+        .filter(
+            TaskAssignment.volunteer_id == current_user.id,
+            TaskAssignment.status == "in_progress"
+        )
+    )
+    assignment = result.scalars().first()
+    if not assignment:
+        raise HTTPException(status_code=404, detail="No active task assignment found")
+        
+    task_result = await db.execute(
+        select(Task).filter(Task.id == assignment.task_id)
+    )
+    task = task_result.scalars().first()
+    assignment.task = task
+    return assignment
 
 @router.get("/feed", response_model=List[TaskResponse])
 async def get_task_feed(
@@ -131,6 +154,7 @@ async def swipe_right(
         volunteer_id=current_user.id,
         status="in_progress"
     )
+    task.status = "assigned"
     db.add(assignment)
     await db.commit()
     await db.refresh(assignment)
@@ -139,6 +163,7 @@ async def swipe_right(
 @router.post("/assignments/{assignment_id}/submit")
 async def submit_report(
     assignment_id: int, 
+    request: Request,
     result_text: str = Form(None),
     image: UploadFile = File(None),
     db: AsyncSession = Depends(get_db), 
@@ -163,7 +188,8 @@ async def submit_report(
             shutil.copyfileobj(image.file, buffer)
         
         # Append image link to result text
-        image_url = f"http://localhost:8000/uploads/{filename}"
+        base_url = str(request.base_url)
+        image_url = f"{base_url}uploads/{filename}"
         final_result_text += f"\n[Image: {image_url}]"
 
     assignment.status = "under_review"

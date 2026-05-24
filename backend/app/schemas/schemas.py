@@ -68,6 +68,9 @@ class TaskAssignmentResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class TaskAssignmentWithTask(TaskAssignmentResponse):
+    task: TaskResponse
+
 class ReportSubmit(BaseModel):
     result_text: str
 
