@@ -56,6 +56,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final userResponse = await apiClient.dio.get('/auth/me');
       state = state.copyWith(isLoading: false, user: User.fromJson(userResponse.data));
       return true;
+    } on DioException catch (e) {
+      String errorMessage = 'Ошибка входа';
+      if (e.response?.data is Map && e.response?.data['detail'] != null) {
+        errorMessage = e.response?.data['detail'].toString();
+      }
+      state = state.copyWith(isLoading: false, error: errorMessage);
+      return false;
     } catch (e) {
       state = state.copyWith(isLoading: false, error: 'Ошибка входа');
       return false;
@@ -72,6 +79,18 @@ class AuthNotifier extends StateNotifier<AuthState> {
         'role': role,
       });
       return await login(email, password);
+    } on DioException catch (e) {
+      String errorMessage = 'Ошибка регистрации';
+      if (e.response?.data is Map && e.response?.data['detail'] != null) {
+        final detail = e.response?.data['detail'];
+        if (detail is String) {
+          errorMessage = detail;
+        } else if (detail is List && detail.isNotEmpty) {
+          errorMessage = detail[0]['msg'] ?? 'Ошибка валидации';
+        }
+      }
+      state = state.copyWith(isLoading: false, error: errorMessage);
+      return false;
     } catch (e) {
       state = state.copyWith(isLoading: false, error: 'Ошибка регистрации');
       return false;

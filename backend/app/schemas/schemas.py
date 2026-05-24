@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, List
 from datetime import datetime
 
@@ -12,7 +12,7 @@ class UserBase(BaseModel):
     longitude: Optional[float] = None
 
 class UserCreate(UserBase):
-    password: str
+    password: str = Field(..., max_length=72, min_length=6)
 
 class UserResponse(UserBase):
     id: int
